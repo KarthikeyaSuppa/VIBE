@@ -38,8 +38,8 @@ async def head():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Local development
-        "https://vibe-1-ec3i.onrender.com",  # Your actual frontend URL on Render
+        "https://vibe-1-ec3i.onrender.com", # Your actual frontend URL on Render
+        "http://localhost:5173",   # Local development
         "*",  # Allow all origins temporarily for debugging
     ],
     allow_credentials=True,
@@ -130,18 +130,21 @@ async def health_check():
 if __name__ == "__main__":
     print("Starting FastAPI server...")
     try:
-        PORT = 10000
+        PORT = int(os.getenv("PORT", "10000"))
         print(f"Attempting to bind to port {PORT}")
-        if not bind_port(PORT):
-            raise Exception(f"Failed to bind to port {PORT}")
         
-        print(f"Starting server on 0.0.0.0:{PORT}")
-        uvicorn.run(
+        # Configure server settings
+        config = uvicorn.Config(
             "main:app",
-            host="0.0.0.0",
+            host="0.0.0.0",  # Bind to all interfaces
             port=PORT,
             log_level="info",
-            access_log=True
+            access_log=True,
+            workers=1
         )
+        
+        server = uvicorn.Server(config)
+        server.run()
+        
     except Exception as e:
         print(f"Error starting server: {e}")
