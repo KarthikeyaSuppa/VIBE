@@ -14,6 +14,7 @@ from collections import defaultdict
 import networkx as nx
 import numpy as np
 import io
+from safetensors.torch import load_file
 
 
 
@@ -35,32 +36,49 @@ groq_client = Groq(api_key=groq_api_key)
 # Global model variable
 model = None
 tokenizer = None
+s3_client = None
 
-def init_model_and_tokenizer():
-    global model, tokenizer
-    try:
-        print("Initializing tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained("antoinelouis/colbert-xm")
-
-        print("Initializing S3 client...")
+def get_s3_client():
+    global s3_client
+    if s3_client is None:
         s3_client = boto3.client(
             's3',
             aws_access_key_id=os.getenv("AWS_ACCESS_KEY"),
             aws_secret_access_key=os.getenv("AWS_SECRET_KEY"),
             region_name=os.getenv("AWS_REGION")
         )
+    return s3_client
 
-        print("Loading model from S3...")
-        response = s3_client.get_object(
-            Bucket=os.getenv("AWS_S3_BUCKET"),
-            Key=os.getenv("AWS_S3_MODEL_KEY")
-        )
-        model_bytes = response['Body'].read()
+def load_model_lazy():
+    global model
+    if model is None:
+        try:
+            s3 = get_s3_client()
+            # Get model metadata without downloading
+            response = s3.get_object(
+                Bucket=os.getenv("AWS_S3_BUCKET"),
+                Key=os.getenv("AWS_S3_MODEL_KEY"),
+                Range='bytes=0-1024'  # Just get header info
+            )
+            # Initialize model architecture
+            model = AutoModel.from_pretrained(
+                "antoinelouis/colbert-xm",
+                trust_remote_code=True,
+                use_safetensors=True
+            )
+        except Exception as e:
+            print(f"Error loading model: {e}")
+    return model
 
-        print("Loading model into memory...")
-        model = torch.load(io.BytesIO(model_bytes), map_location=torch.device('cpu'))
-        model.eval()
-
+def init_model_and_tokenizer():
+    global model, tokenizer
+    try:
+        print("Initializing tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained("antoinelouis/colbert-xm")
+        
+        # Lazy load model
+        model = load_model_lazy()
+        
         return model, tokenizer
     except Exception as e:
         print(f"Error initializing model and tokenizer: {e}")
@@ -96,7 +114,7 @@ def init_search_system():
         model, tokenizer = init_model_and_tokenizer()
         if model is None or tokenizer is None:
             print("Failed to initialize model or tokenizer")
-            return None, None
+            return None, None, None, None
         
         # Pinecone setup with retry
         max_retries = 3
@@ -135,6 +153,11 @@ def get_query_embedding(text):
         # Validate input
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Query must be a non-empty string")
+
+        # Ensure model is loaded
+        model = load_model_lazy()
+        if model is None:
+            raise ValueError("Model not initialized")
 
         # Process with local model
         with torch.no_grad():
