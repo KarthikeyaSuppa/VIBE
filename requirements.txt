@@ -65,4 +65,14 @@ tensorflow-io-gcs-filesystem==0.31.0
 packaging>=20.0  # Required by transformers
 regex!=2019.12.17  # Required by transformers
 pyyaml>=5.1  # Required by transformers
-tqdm>=4.27  # Required by transformers 
+tqdm>=4.27  # Required by transformers
+boto3==1.34.69
+botocore==1.34.69
+s3transfer==0.10.0
+jmespath==1.0.1
+
+# Web
+Flask==2.2.3
+Flask-Cors==4.0.0
+httpx==0.24.1
+httpcore==0.17.0 

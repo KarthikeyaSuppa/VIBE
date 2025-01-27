@@ -1,16 +1,19 @@
 from pymongo import MongoClient
 from pinecone import Pinecone
+import boto3
+import os
 from dotenv import load_dotenv
-import requests
 from groq import Groq
+import torch
+from transformers import AutoTokenizer, AutoModel
 from bson import ObjectId
 import random
-import os
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
 import networkx as nx
 import numpy as np
+import io
 
 
 
@@ -21,32 +24,80 @@ load_dotenv()
 mongodb_uri = os.getenv("MONGODB_URI")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY")
-huggingface_token = os.getenv("HUGGINGFACE_TOKEN")
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+S3_BUCKET = os.getenv("AWS_S3_BUCKET")
+S3_MODEL_KEY = os.getenv("AWS_S3_MODEL_KEY")
 
 # Groq setup
 groq_client = Groq(api_key=groq_api_key)
 
-# Initialize Pinecone client
-pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+# Global model variable
+model = None
+tokenizer = None
 
-# HuggingFace API endpoint
-API_URL = "https://api-inference.huggingface.co/models/antoinelouis/colbert-xm"
-headers = {"Authorization": f"Bearer {huggingface_token}"}
+def init_model_and_tokenizer():
+    global model, tokenizer
+    try:
+        print("Initializing tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained("antoinelouis/colbert-xm")
+
+        print("Initializing S3 client...")
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_KEY"),
+            region_name=os.getenv("AWS_REGION")
+        )
+
+        print("Loading model from S3...")
+        response = s3_client.get_object(
+            Bucket=os.getenv("AWS_S3_BUCKET"),
+            Key=os.getenv("AWS_S3_MODEL_KEY")
+        )
+        model_bytes = response['Body'].read()
+
+        print("Loading model into memory...")
+        model = torch.load(io.BytesIO(model_bytes), map_location=torch.device('cpu'))
+        model.eval()
+
+        return model, tokenizer
+    except Exception as e:
+        print(f"Error initializing model and tokenizer: {e}")
+        return None, None
 
 # Initialize models and connections
+def get_model_from_s3():
+    global model
+    try:
+        print("Initializing S3 client...")
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            region_name=os.getenv("AWS_REGION", "us-east-1")  # Add your region
+        )
+
+        print("Loading model from S3...")
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_MODEL_KEY)
+        model_bytes = response['Body'].read()
+
+        print("Loading model into memory...")
+        model = torch.load(io.BytesIO(model_bytes), map_location=torch.device('cpu'))
+        model.eval()
+
+        return model
+    except Exception as e:
+        print(f"Error loading model from S3: {e}")
+        return None
+
 def init_search_system():
     try:
-        try:
-            # Test API connection
-            response = requests.post(API_URL, headers=headers, json={"inputs": "test"})
-            if not response.ok:
-                print(f"HuggingFace API error: Status {response.status_code}")
-                print(f"Response: {response.text}")
-                # Continue without the model for now
-        except Exception as model_error:
-            print(f"Error loading primary model: {model_error}")
-            # Continue initialization without the model
-
+        model, tokenizer = init_model_and_tokenizer()
+        if model is None or tokenizer is None:
+            print("Failed to initialize model or tokenizer")
+            return None, None
+        
         # Pinecone setup with retry
         max_retries = 3
         pinecone_instance = None
@@ -85,14 +136,18 @@ def get_query_embedding(text):
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Query must be a non-empty string")
 
-        # Get embeddings from HuggingFace API
-        response = requests.post(API_URL, headers=headers, json={"inputs": text})
-        if response.status_code != 200:
-            raise Exception(f"API request failed with status {response.status_code}")
-            
-        # Convert response to numpy array
-        embeddings = np.array(response.json())
-        return embeddings
+        # Process with local model
+        with torch.no_grad():
+            inputs = tokenizer(
+                text,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=512
+            )
+            outputs = model(**inputs)
+            embeddings = outputs.last_hidden_state.mean(dim=1).squeeze().numpy()
+            return embeddings
     except Exception as e:
         print(f"Error creating query embedding: {e}")
         return None
