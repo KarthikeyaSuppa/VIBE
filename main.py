@@ -130,21 +130,17 @@ async def health_check():
 if __name__ == "__main__":
     print("Starting FastAPI server...")
     try:
-        PORT = int(os.getenv("PORT", "10000"))
+        PORT = 10000  # Force port 10000
         print(f"Attempting to bind to port {PORT}")
         
-        # Configure server settings
-        config = uvicorn.Config(
+        # Direct uvicorn run
+        uvicorn.run(
             "main:app",
-            host="0.0.0.0",  # Bind to all interfaces
+            host="0.0.0.0",
             port=PORT,
             log_level="info",
-            access_log=True,
-            workers=1
+            access_log=True
         )
-        
-        server = uvicorn.Server(config)
-        server.run()
         
     except Exception as e:
         print(f"Error starting server: {e}")
