@@ -39,6 +39,7 @@ groq_client = Groq(api_key=groq_api_key)
 model = None
 tokenizer = None
 s3_client = None
+search_system = None
 
 def get_s3_client():
     global s3_client
@@ -177,42 +178,26 @@ def process_with_partial_weights(inputs, weights):
         return None
 
 def init_search_system():
+    """Initialize the search system with tokenizer and model"""
     try:
-        model, tokenizer = init_model_and_tokenizer()
-        if model is None or tokenizer is None:
-            print("Failed to initialize model or tokenizer")
-            return None, None, None, None
+        print("Initializing search system...")
+        # Initialize tokenizer
+        global tokenizer, model
+        tokenizer = init_tokenizer()
+        if tokenizer is None:
+            raise ValueError("Failed to initialize tokenizer")
+            
+        # Initialize model config
+        model_config = get_model_config()
+        if model_config is None:
+            raise ValueError("Failed to get model config")
+            
+        print("Search system initialized successfully")
+        return True
         
-        # Pinecone setup with retry
-        max_retries = 3
-        pinecone_instance = None
-        for attempt in range(max_retries):
-            try:
-                pinecone_instance = pc.Index("project-0")
-                break
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    print(f"Failed to connect to Pinecone after {max_retries} attempts: {e}")
-                    return None, None, None, None
-                print(f"Retrying Pinecone connection... Attempt {attempt + 1}")
-
-        # MongoDB setup with retry
-        try:
-            client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
-            client.server_info()  # Test connection
-            db = client["project_database"]
-        except Exception as mongo_error:
-            print(f"MongoDB connection error: {mongo_error}")
-            return None, None, None, None
-
-        if None in (pinecone_instance, db):
-            print("One or more components failed to initialize")
-            return None, None, None, None
-
-        return pinecone_instance, db
     except Exception as e:
         print(f"Error initializing search system: {e}")
-        return None, None, None, None
+        return False
 
 # Search for similar vectors
 def search_vectors(query_embedding, index, k=5):
