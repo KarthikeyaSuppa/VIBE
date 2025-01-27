@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: story-generator-api-ynk2
+    env: python
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install wheel
+      pip install -r requirements.txt --no-cache-dir
+    startCommand: |
+      export PORT=${PORT:-10000}
+      uvicorn main:app --host 127.0.0.1 --port $PORT --workers 1
+    memory: 512
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HUGGINGFACE_TOKEN
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true 

@@ -1,0 +1,68 @@
+# Core dependencies
+fastapi==0.104.1
+anyio==3.7.1
+starlette==0.27.0
+uvicorn==0.27.0
+pydantic==2.6.1
+pydantic-core==2.16.2
+typing-extensions>=4.8.0
+click==8.1.7  # Required by uvicorn
+annotated-types>=0.4.0  # Required by pydantic
+sniffio>=1.1.0  # Required by anyio/FastAPI
+
+# HTTP and related
+requests==2.27.1
+charset-normalizer==2.0.12  # Required by requests
+urllib3==1.26.15
+certifi>=2021.10.8
+idna>=2.5
+python-multipart==0.0.6
+h11==0.14.0  # Required by uvicorn
+
+# Database and utils
+pymongo==4.6.1
+pinecone-client==3.0.0
+python-dateutil>=2.8.2  # Required by pinecone
+python-dotenv==1.0.1
+networkx==3.2.1
+numpy>=1.22,<1.24
+
+# AI/ML - CPU only versions
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.0+cpu
+torchvision==0.17.0+cpu
+torchaudio==2.2.0+cpu
+sentence-transformers==2.2.2
+transformers==4.37.2
+huggingface-hub==0.20.3
+tokenizers>=0.14,<0.19  # Match transformers requirement
+tensorflow-cpu==2.12.0
+keras>=2.12.0,<2.13.0
+gast>=0.2.1,<=0.4.0
+groq==0.4.2
+sentencepiece==0.2.0
+protobuf>=3.20.3,<5.0.0dev
+tensorboard>=2.12,<2.13
+wrapt>=1.11.0,<1.15
+
+# Web
+Flask==2.2.3
+Flask-Cors==4.0.0
+httpx==0.24.1
+httpcore==0.17.0
+
+# Additional dependencies
+absl-py==2.1.0
+astunparse==1.6.3
+flatbuffers==24.12.23
+google-pasta==0.2.0
+grpcio==1.69.0
+h5py==3.12.1
+opt_einsum==3.4.0
+scipy==1.13.1
+six==1.17.0
+tensorflow-io-gcs-filesystem==0.31.0
+packaging>=20.0  # Required by transformers
+regex!=2019.12.17  # Required by transformers
+pyyaml>=5.1  # Required by transformers
+tqdm>=4.27  # Required by transformers 
