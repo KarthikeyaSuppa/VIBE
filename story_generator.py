@@ -86,6 +86,10 @@ def init_tokenizer():
                         f.write(content)
                 # Initialize tokenizer from temporary directory
                 tokenizer = AutoTokenizer.from_pretrained(tmp_dir)
+                return tokenizer
+        except Exception as e:
+            print(f"Error initializing tokenizer: {e}")
+            return None
     return tokenizer
 
 def load_model_weights(query_text):
@@ -147,10 +151,30 @@ def get_query_embedding(text):
 
 def process_with_partial_weights(inputs, weights):
     """Process inputs with partial weights loading"""
-    # Implement your processing logic here
-    # This is where you'd use the weights to generate embeddings
-    # while maintaining minimal memory usage
-    pass
+    try:
+        # Initialize model architecture
+        model_config = get_model_config()
+        model = AutoModel.from_pretrained(
+            "antoinelouis/colbert-xm",
+            config=model_config,
+            state_dict=weights,
+            trust_remote_code=True
+        )
+        
+        # Set to evaluation mode
+        model.eval()
+        
+        # Process inputs in smaller chunks
+        with torch.no_grad():
+            outputs = model(**inputs)
+            # Get embeddings from the last hidden state
+            embeddings = outputs.last_hidden_state.mean(dim=1)
+            
+        return embeddings
+        
+    except Exception as e:
+        print(f"Error processing with partial weights: {e}")
+        return None
 
 def init_search_system():
     try:
