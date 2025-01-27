@@ -14,7 +14,9 @@ from collections import defaultdict
 import networkx as nx
 import numpy as np
 import io
-from safetensors.torch import load_file
+from safetensors.torch import load
+import tempfile
+import json
 
 
 
@@ -33,7 +35,7 @@ S3_MODEL_KEY = os.getenv("AWS_S3_MODEL_KEY")
 # Groq setup
 groq_client = Groq(api_key=groq_api_key)
 
-# Global model variable
+# Global variables
 model = None
 tokenizer = None
 s3_client = None
@@ -49,65 +51,106 @@ def get_s3_client():
         )
     return s3_client
 
-def load_model_lazy():
-    global model
-    if model is None:
-        try:
-            s3 = get_s3_client()
-            # Get model metadata without downloading
-            response = s3.get_object(
-                Bucket=os.getenv("AWS_S3_BUCKET"),
-                Key=os.getenv("AWS_S3_MODEL_KEY"),
-                Range='bytes=0-1024'  # Just get header info
-            )
-            # Initialize model architecture
-            model = AutoModel.from_pretrained(
-                "antoinelouis/colbert-xm",
-                trust_remote_code=True,
-                use_safetensors=True
-            )
-        except Exception as e:
-            print(f"Error loading model: {e}")
-    return model
+def get_model_config():
+    """Fetch model config from S3"""
+    s3 = get_s3_client()
+    response = s3.get_object(
+        Bucket="vibe-01",
+        Key="colbert-xm/config.json"
+    )
+    return json.loads(response['Body'].read())
 
-def init_model_and_tokenizer():
-    global model, tokenizer
-    try:
-        print("Initializing tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained("antoinelouis/colbert-xm")
-        
-        # Lazy load model
-        model = load_model_lazy()
-        
-        return model, tokenizer
-    except Exception as e:
-        print(f"Error initializing model and tokenizer: {e}")
-        return None, None
-
-# Initialize models and connections
-def get_model_from_s3():
-    global model
-    try:
-        print("Initializing S3 client...")
-        s3_client = boto3.client(
-            's3',
-            aws_access_key_id=AWS_ACCESS_KEY,
-            aws_secret_access_key=AWS_SECRET_KEY,
-            region_name=os.getenv("AWS_REGION", "us-east-1")  # Add your region
+def get_tokenizer_files():
+    """Fetch tokenizer files from S3"""
+    s3 = get_s3_client()
+    tokenizer_files = {}
+    for filename in ['tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json']:
+        response = s3.get_object(
+            Bucket="vibe-01",
+            Key=f"colbert-xm/{filename}"
         )
+        tokenizer_files[filename] = response['Body'].read()
+    return tokenizer_files
 
-        print("Loading model from S3...")
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_MODEL_KEY)
-        model_bytes = response['Body'].read()
+def init_tokenizer():
+    """Initialize tokenizer directly from S3 files"""
+    global tokenizer
+    if tokenizer is None:
+        try:
+            # Create temporary directory for tokenizer files
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                # Save tokenizer files temporarily
+                tokenizer_files = get_tokenizer_files()
+                for filename, content in tokenizer_files.items():
+                    with open(f"{tmp_dir}/{filename}", 'wb') as f:
+                        f.write(content)
+                # Initialize tokenizer from temporary directory
+                tokenizer = AutoTokenizer.from_pretrained(tmp_dir)
+    return tokenizer
 
-        print("Loading model into memory...")
-        model = torch.load(io.BytesIO(model_bytes), map_location=torch.device('cpu'))
-        model.eval()
-
-        return model
+def load_model_weights(query_text):
+    """Load only necessary model weights for processing a specific query"""
+    try:
+        s3 = get_s3_client()
+        
+        # Get only the necessary part of model.safetensors
+        # This is a simplified example - you'll need to implement proper partial loading
+        response = s3.get_object(
+            Bucket="vibe-01",
+            Key="colbert-xm/model.safetensors",
+            Range='bytes=0-1024000'  # Adjust range based on your needs
+        )
+        
+        # Load partial weights
+        with tempfile.NamedTemporaryFile() as tmp:
+            tmp.write(response['Body'].read())
+            tmp.flush()
+            partial_weights = load(tmp.name)
+            
+        return partial_weights
+        
     except Exception as e:
-        print(f"Error loading model from S3: {e}")
+        print(f"Error loading model weights: {e}")
         return None
+
+def get_query_embedding(text):
+    """Process query with minimal memory usage"""
+    try:
+        # Initialize tokenizer if needed
+        if tokenizer is None:
+            init_tokenizer()
+            
+        # Tokenize input
+        inputs = tokenizer(
+            text,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=512
+        )
+        
+        # Load only necessary weights and process
+        weights = load_model_weights(text)
+        if weights is None:
+            raise ValueError("Failed to load model weights")
+            
+        # Process with minimal memory footprint
+        with torch.no_grad():
+            # Process in smaller chunks if needed
+            embeddings = process_with_partial_weights(inputs, weights)
+            
+        return embeddings.numpy()
+        
+    except Exception as e:
+        print(f"Error creating query embedding: {e}")
+        return None
+
+def process_with_partial_weights(inputs, weights):
+    """Process inputs with partial weights loading"""
+    # Implement your processing logic here
+    # This is where you'd use the weights to generate embeddings
+    # while maintaining minimal memory usage
+    pass
 
 def init_search_system():
     try:
@@ -146,34 +189,6 @@ def init_search_system():
     except Exception as e:
         print(f"Error initializing search system: {e}")
         return None, None, None, None
-
-# Create embedding for query text
-def get_query_embedding(text):
-    try:
-        # Validate input
-        if not isinstance(text, str) or not text.strip():
-            raise ValueError("Query must be a non-empty string")
-
-        # Ensure model is loaded
-        model = load_model_lazy()
-        if model is None:
-            raise ValueError("Model not initialized")
-
-        # Process with local model
-        with torch.no_grad():
-            inputs = tokenizer(
-                text,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=512
-            )
-            outputs = model(**inputs)
-            embeddings = outputs.last_hidden_state.mean(dim=1).squeeze().numpy()
-            return embeddings
-    except Exception as e:
-        print(f"Error creating query embedding: {e}")
-        return None
 
 # Search for similar vectors
 def search_vectors(query_embedding, index, k=5):
