@@ -634,27 +634,44 @@ Style Elements:
         return f"Error in story generation process: {str(e)}"
     
 
-def modified_generate_story(user_query):
-    """Enhanced main story generation function that incorporates character relationships"""
+def modified_generate_story(prompt: str):
+    """Generate story based on prompt"""
     try:
-        # Initialize system
-        _, db = init_search_system()
-        
-        # Get relevant story document
-        story_doc = db.stories.find_one({'characters': {'$exists': True}})
-        
-        if story_doc:
-            # Enhance story with character relationships
-            enhanced_story = enhance_story_generation(db, story_doc)
+        if tokenizer is None:
+            if not init_search_system():
+                raise ValueError("Failed to initialize search system")
             
-            # Generate story with enhanced context
-            return generate_story_with_context(user_query, enhanced_story['character_context'])
-        else:
-            # Fallback to original story generation if no character data found
-            return generate_story(user_query)
+        # Process the prompt
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=512
+        )
+        
+        # Get embeddings
+        weights = load_model_weights(prompt)
+        if weights is None:
+            raise ValueError("Failed to load model weights")
             
+        embeddings = process_with_partial_weights(inputs, weights)
+        if embeddings is None:
+            raise ValueError("Failed to process inputs")
+            
+        # For now, return a simple response
+        return {
+            "status": "success",
+            "story": f"Here's a horror story based on your prompt: {prompt}\n\n[Story content will be generated here]",
+            "embeddings": embeddings.tolist() if embeddings is not None else None
+        }
+        
     except Exception as e:
-        return f"Error in enhanced story generation: {str(e)}"
+        print(f"Error generating story: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 def init_feedback_collection(db):

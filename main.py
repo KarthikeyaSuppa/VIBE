@@ -62,10 +62,13 @@ async def head():
 
 @app.post("/generate")
 async def generate_story(request: StoryRequest):
-    response = modified_generate_story(request.prompt)
-    if response["status"] == "error":
-        raise HTTPException(status_code=500, detail=response["message"])
-    return response
+    try:
+        response = modified_generate_story(request.prompt)
+        if response["status"] == "error":
+            raise HTTPException(status_code=500, detail=response["message"])
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/feedback")
 async def submit_feedback(feedback: FeedbackRequest):

@@ -31,7 +31,7 @@ const StoryDialog: React.FC<StoryDialogProps> = ({ onClose }) => {
   const [feedback, setFeedback] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (story && step === 'story') {
@@ -58,32 +58,31 @@ const StoryDialog: React.FC<StoryDialogProps> = ({ onClose }) => {
   }, [story, step]);
 
   const handleSubmitPrompt = async () => {
-    if (!prompt.trim()) return;
-    
-    setIsLoading(true);
-    setError(null);
-    
     try {
-      const response = await fetch(`${API_URL}/generate-story`, {
+      setIsLoading(true);
+      setError('');
+      
+      const response = await fetch('https://vibe-yxg8.onrender.com/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
-        body: JSON.stringify({ query: prompt }),
+        body: JSON.stringify({ prompt }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to generate story');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      if (data.status === 'error') {
+        throw new Error(data.message);
+      }
+
       setStory(data.story);
-      setStep('story');
+      setStep('result');
     } catch (err) {
-      setError(err.message || 'Failed to generate story. Please try again.');
-      console.error('Error generating story:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate story');
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +181,9 @@ const StoryDialog: React.FC<StoryDialogProps> = ({ onClose }) => {
               disabled={isLoading}
             />
             {error && (
-              <p className="text-red-500 mb-4">{error}</p>
+              <div className="text-red-500 mb-4 p-4 bg-red-500/10 rounded-lg">
+                {error}
+              </div>
             )}
             <button
               onClick={handleSubmitPrompt}
