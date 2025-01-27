@@ -4,8 +4,9 @@ services:
     env: python
     buildCommand: |
       python -m pip install --upgrade pip
+      pip config set global.timeout 1000
       pip install wheel
-      pip install -r requirements.txt --no-cache-dir
+      pip install -r requirements.txt --no-cache-dir --timeout 1000
     startCommand: |
       export PORT=${PORT:-10000}
       uvicorn main:app --host 127.0.0.1 --port $PORT --workers 1
