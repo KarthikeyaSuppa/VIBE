@@ -24,7 +24,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # Local development
         "https://vibe-1-ec3i.onrender.com",  # Your actual frontend URL on Render
-
+        "*",  # Allow all origins temporarily for debugging
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -101,19 +101,31 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     try:
-        # Quick connection test
-        tokenizer, model, pinecone_instance, db = init_search_system()
-        return {"status": "healthy" if None not in (tokenizer, model, pinecone_instance, db) else "degraded"}
+        port = os.getenv("PORT", "10000")
+        pinecone_instance, db = init_search_system()
+        return {
+            "status": "healthy",
+            "port": port,
+            "database": "connected" if db else "disconnected",
+            "pinecone": "connected" if pinecone_instance else "disconnected"
+        }
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
 
 if __name__ == "__main__":
     print("Starting FastAPI server...")
-    port = int(os.getenv("PORT", 10000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",    # Listen on all interfaces
-        port=port,
-        workers=1,
-        reload=False  # Disable reload in production
-    )
+    try:
+        port = int(os.getenv("PORT", "10000"))
+        print(f"Attempting to bind to port {port}")
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=port,
+            workers=1,
+            reload=False,
+            proxy_headers=True,
+            forwarded_allow_ips="*",
+            log_level="info"
+        )
+    except Exception as e:
+        print(f"Error starting server: {e}")
