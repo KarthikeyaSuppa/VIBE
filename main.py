@@ -7,14 +7,26 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import datetime
 import os
+import socket
 
 app = FastAPI()
+
+def bind_port(port: int) -> bool:
+    """Try to bind to the specified port to ensure it's available"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('0.0.0.0', port))
+        sock.close()
+        return True
+    except Exception as e:
+        print(f"Port {port} binding failed: {e}")
+        return False
 
 @app.get("/")
 async def root():
     return {
         "status": "ok",
-        "port": os.getenv("PORT", "10000"),
+        "port": "10000",
         "host": "0.0.0.0"
     }
 
@@ -105,11 +117,10 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     try:
-        port = os.getenv("PORT", "10000")
         pinecone_instance, db = init_search_system()
         return {
             "status": "healthy",
-            "port": port,
+            "port": "10000",
             "database": "connected" if db else "disconnected",
             "pinecone": "connected" if pinecone_instance else "disconnected"
         }
@@ -119,12 +130,16 @@ async def health_check():
 if __name__ == "__main__":
     print("Starting FastAPI server...")
     try:
-        port = int(os.getenv("PORT", "10000"))
-        print(f"Starting server on 0.0.0.0:{port}")
+        PORT = 10000
+        print(f"Attempting to bind to port {PORT}")
+        if not bind_port(PORT):
+            raise Exception(f"Failed to bind to port {PORT}")
+        
+        print(f"Starting server on 0.0.0.0:{PORT}")
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
-            port=port,
+            port=PORT,
             log_level="info",
             access_log=True
         )
