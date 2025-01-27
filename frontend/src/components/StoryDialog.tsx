@@ -8,7 +8,7 @@ interface StoryDialogProps {
 
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://vibe-yxg8.onrender.com'
-  : 'http://localhost:8000';
+  : 'http://localhost:10000';
 
 const formatStory = (rawStory: string): string => {
   // Remove the initial greeting if present

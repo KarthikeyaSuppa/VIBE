@@ -39,11 +39,10 @@ def init_search_system():
         try:
             # Test API connection
             response = requests.post(API_URL, headers=headers, json={"inputs": "test"})
-            if response.status_code == 401:
-                print("Hugging Face API authentication failed. Check your token.")
+            if not response.ok:
+                print(f"HuggingFace API error: Status {response.status_code}")
+                print(f"Response: {response.text}")
                 # Continue without the model for now
-            else:
-                raise Exception(f"API test failed with status {response.status_code}")
         except Exception as model_error:
             print(f"Error loading primary model: {model_error}")
             # Continue initialization without the model
