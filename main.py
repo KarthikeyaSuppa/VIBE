@@ -12,7 +12,11 @@ app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "port": os.getenv("PORT", "10000"),
+        "host": "0.0.0.0"
+    }
 
 @app.head("/")
 async def head():
@@ -116,16 +120,13 @@ if __name__ == "__main__":
     print("Starting FastAPI server...")
     try:
         port = int(os.getenv("PORT", "10000"))
-        print(f"Attempting to bind to port {port}")
+        print(f"Starting server on 0.0.0.0:{port}")
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
             port=port,
-            workers=1,
-            reload=False,
-            proxy_headers=True,
-            forwarded_allow_ips="*",
-            log_level="info"
+            log_level="info",
+            access_log=True
         )
     except Exception as e:
         print(f"Error starting server: {e}")
