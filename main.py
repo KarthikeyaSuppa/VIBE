@@ -14,12 +14,17 @@ app = FastAPI()
 async def root():
     return {"status": "ok"}
 
+@app.head("/")
+async def head():
+    return {"status": "ok"}
+
 # Configure CORS - This is crucial for frontend-backend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Local development
         "https://vibe-1-ec3i.onrender.com",  # Your actual frontend URL on Render
+
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -86,9 +91,9 @@ async def submit_feedback(feedback: FeedbackRequest):
 @app.on_event("startup")
 async def startup_event():
     try:
-        # Test database connections
-        tokenizer, model, pinecone_instance, db = init_search_system()
-        if None in (tokenizer, model, pinecone_instance, db):
+        # Initialize system
+        pinecone_instance, db = init_search_system()
+        if None in (pinecone_instance, db):
             print("Warning: Some components failed to initialize")
     except Exception as e:
         print(f"Startup error: {e}")
@@ -107,7 +112,7 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",    # Listen on all interfaces
         port=port,
         workers=1,
         reload=False  # Disable reload in production

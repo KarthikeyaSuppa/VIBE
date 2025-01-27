@@ -7,7 +7,7 @@ interface StoryDialogProps {
 }
 
 const API_URL = process.env.NODE_ENV === 'production'
-  ? 'http://127.0.0.1:8000/'
+  ? 'https://vibe-yxg8.onrender.com'
   : 'http://localhost:8000';
 
 const formatStory = (rawStory: string): string => {
@@ -68,19 +68,21 @@ const StoryDialog: React.FC<StoryDialogProps> = ({ onClose }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({ query: prompt }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate story');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to generate story');
       }
 
       const data = await response.json();
       setStory(data.story);
       setStep('story');
     } catch (err) {
-      setError('Failed to generate story. Please try again.');
+      setError(err.message || 'Failed to generate story. Please try again.');
       console.error('Error generating story:', err);
     } finally {
       setIsLoading(false);
