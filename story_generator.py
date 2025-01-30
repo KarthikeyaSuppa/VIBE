@@ -36,7 +36,7 @@ S3_MODEL_KEY = os.getenv("AWS_S3_MODEL_KEY")
 groq_client = Groq(api_key=groq_api_key)
 
 # Global variables
-model = None
+colbert_model = None
 tokenizer = None
 s3_client = None
 search_system = None
@@ -118,36 +118,36 @@ def load_model_weights(query_text):
         print(f"Error loading model weights: {e}")
         return None
 
-def get_query_embedding(text):
-    """Process query with minimal memory usage"""
+def get_query_embedding(prompt: str):
+    """Convert query to embedding using ColBERT-XM"""
     try:
-        # Initialize tokenizer if needed
+        global colbert_model, tokenizer
+        
+        # Initialize if not done
         if tokenizer is None:
-            init_tokenizer()
+            tokenizer = init_tokenizer()
+        if colbert_model is None:
+            colbert_model = load_colbert_model()
             
         # Tokenize input
         inputs = tokenizer(
-            text,
+            prompt,
             return_tensors="pt",
             padding=True,
             truncation=True,
             max_length=512
         )
         
-        # Load only necessary weights and process
-        weights = load_model_weights(text)
-        if weights is None:
-            raise ValueError("Failed to load model weights")
-            
-        # Process with minimal memory footprint
+        # Generate embedding
         with torch.no_grad():
-            # Process in smaller chunks if needed
-            embeddings = process_with_partial_weights(inputs, weights)
+            outputs = colbert_model(**inputs)
+            # Use mean pooling to get single vector
+            embedding = outputs.last_hidden_state.mean(dim=1)
             
-        return embeddings.numpy()
+        return embedding
         
     except Exception as e:
-        print(f"Error creating query embedding: {e}")
+        print(f"Error generating query embedding: {e}")
         return None
 
 def process_with_partial_weights(inputs, weights):
@@ -182,7 +182,7 @@ def init_search_system():
     try:
         print("Initializing search system...")
         # Initialize tokenizer
-        global tokenizer, model
+        global tokenizer, colbert_model
         tokenizer = init_tokenizer()
         if tokenizer is None:
             raise ValueError("Failed to initialize tokenizer")
@@ -635,44 +635,95 @@ Style Elements:
     
 
 def modified_generate_story(prompt: str):
-    """Generate story based on prompt"""
+    """Complete story generation pipeline"""
     try:
-        if tokenizer is None:
-            if not init_search_system():
-                raise ValueError("Failed to initialize search system")
-            
-        # Process the prompt
-        inputs = tokenizer(
-            prompt,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=512
-        )
+        print(f"Processing prompt: {prompt}")
         
-        # Get embeddings
-        weights = load_model_weights(prompt)
-        if weights is None:
-            raise ValueError("Failed to load model weights")
+        # 1. Generate query embedding
+        print("Generating query embedding...")
+        embedding = get_query_embedding(prompt)
+        if embedding is None:
+            raise ValueError("Failed to generate query embedding")
             
-        embeddings = process_with_partial_weights(inputs, weights)
-        if embeddings is None:
-            raise ValueError("Failed to process inputs")
+        # 2. Get relevant content
+        print("Fetching relevant content...")
+        relevant_content = get_relevant_content(embedding)
+        if relevant_content is None:
+            raise ValueError("Failed to fetch relevant content")
             
-        # For now, return a simple response
+        # 3. Generate story using LLM
+        print("Generating story with LLM...")
+        story = generate_story_with_llm(prompt, relevant_content)
+        if story is None:
+            raise ValueError("Failed to generate story")
+            
         return {
             "status": "success",
-            "story": f"Here's a horror story based on your prompt: {prompt}\n\n[Story content will be generated here]",
-            "embeddings": embeddings.tolist() if embeddings is not None else None
+            "story": story,
+            "context_used": relevant_content  # Optional: for debugging
         }
         
     except Exception as e:
-        print(f"Error generating story: {e}")
+        print(f"Error in story generation pipeline: {e}")
         return {
             "status": "error",
             "message": str(e)
         }
 
+def get_relevant_content(embedding):
+    """Get relevant content using embeddings"""
+    try:
+        # Connect to your vector store (Pinecone/MongoDB)
+        # Search for relevant content using the embedding
+        # This is a placeholder - implement your vector search logic
+        
+        relevant_content = [
+            "Sample relevant content 1",
+            "Sample relevant content 2"
+        ]
+        return relevant_content
+        
+    except Exception as e:
+        print(f"Error getting relevant content: {e}")
+        return None
+
+def generate_story_with_llm(prompt: str, relevant_content: list):
+    """Generate story using LLM with relevant content"""
+    try:
+        client = groq_client
+        
+        # Construct prompt with relevant content
+        context = "\n".join(relevant_content)
+        
+        messages = [
+            {
+                "role": "system",
+                "content": """You are a creative storyteller. Use the provided context 
+                to create an engaging story. Incorporate elements from the context 
+                while maintaining narrative coherence."""
+            },
+            {
+                "role": "user",
+                "content": f"""Context information:
+                {context}
+                
+                Using this context, write a story based on this prompt: {prompt}"""
+            }
+        ]
+        
+        # Generate story
+        completion = client.chat.completions.create(
+            model="llama2-70b-4096",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2048
+        )
+        
+        return completion.choices[0].message.content
+        
+    except Exception as e:
+        print(f"Error generating story with LLM: {e}")
+        return None
 
 def init_feedback_collection(db):
     """Initialize feedback collection with necessary indexes"""

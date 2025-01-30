@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Cpu, Search, MessageSquare, Star, RefreshCw } from 'lucide-react';
 
 const Help = () => {
-  const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<number | null>(null);
 
   const steps = [
     {
@@ -219,8 +219,8 @@ const Help = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900 py-24">
-      <div className="max-w-7xl mx-auto px-6">
+    <div className="min-h-screen bg-gray-900 py-24 px-4 overflow-x-hidden">
+      <div className="max-w-7xl mx-auto">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -233,43 +233,71 @@ const Help = () => {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative">
           {steps.map((step, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="relative group"
-              onMouseEnter={() => setActiveTooltip(index)}
-              onMouseLeave={() => setActiveTooltip(null)}
-            >
-              <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 hover:transform hover:scale-105 transition-all cursor-pointer">
+            <div key={index} className="relative group">
+              <motion.div
+                className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 h-full
+                          transform transition-all duration-300 hover:scale-105"
+                whileHover={{ scale: 1.05 }}
+              >
                 <div className={`${step.color} mb-4`}>{step.icon}</div>
-                <h3 className="text-xl font-semibold text-white mb-3">{step.title}</h3>
-                <p className="text-gray-300">{step.description}</p>
-              </div>
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  {step.title}
+                </h3>
+                <p className="text-gray-400">{step.description}</p>
+              </motion.div>
 
-              {activeTooltip === index && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="absolute z-50 w-96 bg-gray-800 rounded-xl p-6 shadow-xl left-full ml-4 top-0"
-                >
-                  <h4 className="text-lg font-semibold text-white mb-4">{step.details.title}</h4>
-                  {step.details.content.map((section, sIndex) => (
-                    <div key={sIndex} className="mb-4">
-                      <h5 className="text-sm font-medium text-gray-300 mb-2">{section.subtitle}</h5>
-                      <ul className="list-disc list-inside text-sm text-gray-400">
-                        {section.items.map((item, iIndex) => (
-                          <li key={iIndex} className="mb-1">{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </motion.div>
-              )}
-            </motion.div>
+              <AnimatePresence>
+                {selectedFeature === index && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="absolute z-50 bg-gray-800 rounded-xl p-6 shadow-2xl
+                              w-[300px] sm:w-[350px] left-1/2 transform -translate-x-1/2
+                              top-full mt-4"
+                    style={{
+                      left: index % 3 === 2 ? 'auto' : '50%',
+                      right: index % 3 === 2 ? '0' : 'auto',
+                      transform: index % 3 === 2 ? 'none' : 'translateX(-50%)',
+                      maxWidth: 'calc(100vw - 2rem)'
+                    }}
+                  >
+                    <h4 className="text-xl font-semibold text-white mb-4">
+                      {step.details.title}
+                    </h4>
+                    {step.details.content.map((section, sIdx) => (
+                      <div key={sIdx} className="mb-4">
+                        <h5 className="text-purple-400 font-medium mb-2">
+                          {section.subtitle}
+                        </h5>
+                        <ul className="space-y-2">
+                          {section.items.map((item, iIdx) => (
+                            <li key={iIdx} className="text-gray-300 flex items-start">
+                              <span className="text-purple-500 mr-2">•</span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setSelectedFeature(null)}
+                      className="absolute top-2 right-2 text-gray-400 hover:text-white"
+                    >
+                      ×
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button
+                className="absolute inset-0 w-full h-full cursor-pointer"
+                onClick={() => setSelectedFeature(selectedFeature === index ? null : index)}
+                aria-label={`Learn more about ${step.title}`}
+              />
+            </div>
           ))}
         </div>
 
